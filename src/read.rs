@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, fs::File, io::{self, BufReader}};
+use std::{collections::HashMap, error::Error, fs::File, io::{self, BufReader}, ops::AddAssign};
 
 use uuid::{uuid, Uuid};
 use xml::{self, name::OwnedName, reader::{Events, XmlEvent}, EventReader};
@@ -15,7 +15,7 @@ pub fn read_old_db(path:&str) -> Result<DBInfo, Box<dyn Error>> {
                 if let Some(account) = Account::new(&mut reader_iter, name.clone()) {
                     result.accounts.push(account);
                 }
-                if let Some(transaction) = Transaction::new(&mut reader_iter, name) {
+                if let Some(transaction) = Transaction::from_xml(&mut reader_iter, name) {
                     result.transactions.push(transaction);
                 }
             }
@@ -40,6 +40,17 @@ pub struct DBInfo<'a> {
 impl<'a> DBInfo<'a> {
     pub fn new(path:&str) -> DBInfo {
         DBInfo { accounts: Vec::new(), transactions: Vec::new(), path: path }
+    }
+
+    pub fn accounts(&self) -> &Vec<Account> {
+        &self.accounts
+    }
+
+    pub fn get_total_value(&self, account:&Account) -> Value {
+        self.transactions.iter()
+                .filter_map(|transaction| transaction.accounts.get(&account.uuid))
+                .map(|value| value.0)
+                .sum()
     }
 }
 
@@ -91,11 +102,15 @@ impl Account {
         }
         None
     }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 
 impl Transaction {
-    pub fn new<R: io::Read>(xml_iter: &mut Events<R>, name: OwnedName) -> Option<Transaction> {
+    pub fn from_xml<R: io::Read>(xml_iter: &mut Events<R>, name: OwnedName) -> Option<Transaction> {
         if name.local_name != "transaction" {
             return None;
         }
@@ -104,6 +119,14 @@ impl Transaction {
             accounts.insert(account, value);
         }
         Some(Transaction { accounts })
+    }
+
+    pub fn new(splits: Vec<(Uuid, Value, Quantity)>) -> Transaction {
+        let mut accounts = HashMap::new();
+        for account in splits {
+            accounts.insert(account.0, (account.1, account.2));
+        }
+        Transaction { accounts }
     }
 
     fn get_split<R: io::Read>(xml_iter: &mut Events<R>) -> Option<(Uuid, (Value, Quantity))> {
@@ -169,7 +192,45 @@ pub struct Transaction {
     accounts:HashMap<Uuid, (Value, Quantity)>
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Value(i32, u16);
+
+impl std::ops::Add for Value {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        if rhs.1 > self.1 {
+            let factor = rhs.1 / self.1;
+            Value(rhs.0 + self.0* factor as i32, rhs.1)
+        } else {
+            let factor = self.1 / rhs.1;
+            Value(self.0 + rhs.0* factor as i32, self.1)
+        }
+    }
+}
+
+impl std::ops::AddAssign for Value {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs
+    }
+}
+
+impl std::iter::Sum for Value {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut sum = Self::default();
+        for value in iter {
+            sum += value;
+        }
+        sum
+    }
+}
+
+impl Default for Value {
+    fn default() -> Self {
+        Self(Default::default(), 100)
+    }
+}
+
+
 #[derive(Debug)]
-pub struct Value(i32, u8);
-#[derive(Debug)]
-pub struct Quantity(i32, u8);
+pub struct Quantity(i32, u16);
