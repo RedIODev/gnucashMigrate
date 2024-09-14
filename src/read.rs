@@ -49,8 +49,13 @@ impl<'a> DBInfo<'a> {
     }
 
     pub fn get_total(&self, account:&Account) -> (Value, Quantity) {
+        let mut flag = false;
+        if account.name() == "Veranstaltungen" {
+            flag = true;
+        }
         let (value, quantity): (SumExtender<_>, SumExtender<_>) = self.transactions.iter()
                 .filter_map(|transaction| transaction.accounts.get(&account.uuid))
+                .inspect(|v| if flag {println!("Veranstaltungen:{:?}", v)})
                 .map(|amount| (amount.0.0, amount.1.0))
                 .unzip();
         (Value(*value), Quantity(*quantity))
@@ -61,6 +66,7 @@ impl<'a> DBInfo<'a> {
 pub struct Account {
     uuid: Uuid,
     name: String,
+    parent: Option<Uuid>,
 }
 
 impl Account {
@@ -70,6 +76,7 @@ impl Account {
         }
         let mut result_name = None;
         let mut result_uuid = None;
+        let mut result_parent = None;
         while let Some(element) = xml_iter.next() {
             match element {
                 Ok(XmlEvent::StartElement { name, .. }) => {
@@ -86,13 +93,18 @@ impl Account {
                             }
                         }
 
+                        "parent" => {
+                            if let Some(Ok(XmlEvent::Characters(text))) = xml_iter.next() {
+                                result_parent.get_or_insert_with(||Uuid::parse_str(&text).expect("Invalid UUID."));
+                            }
+                        }
                         _ => {continue;}
                     }
                 }
 
                 Ok(XmlEvent::EndElement { name }) => {
                     if name.local_name == "account" {
-                        return Some(Account { uuid: result_uuid.unwrap(), name: result_name.unwrap()});
+                        return Some(Account { uuid: result_uuid.unwrap(), name: result_name.unwrap(), parent: result_parent});
                     }
                 }
 
@@ -112,6 +124,10 @@ impl Account {
 
     pub fn uuid(&self) -> Uuid {
         self.uuid
+    }
+
+    pub fn parent(&self) -> Option<Uuid> {
+        self.parent
     }
 }
 
