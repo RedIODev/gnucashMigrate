@@ -1,7 +1,9 @@
-use std::{collections::HashMap, error::Error, fs::File, io::{self, BufReader}, ops::AddAssign};
+use std::{collections::HashMap, error::Error, fs::File, io::{self, BufReader}};
 
-use uuid::{uuid, Uuid};
+use uuid::Uuid;
 use xml::{self, name::OwnedName, reader::{Events, XmlEvent}, EventReader};
+
+use crate::common::{Fixed, SumExtender};
 
 
 pub fn read_old_db(path:&str) -> Result<DBInfo, Box<dyn Error>> {
@@ -46,11 +48,12 @@ impl<'a> DBInfo<'a> {
         &self.accounts
     }
 
-    pub fn get_total_value(&self, account:&Account) -> Value {
-        self.transactions.iter()
+    pub fn get_total(&self, account:&Account) -> (Value, Quantity) {
+        let (value, quantity): (SumExtender<_>, SumExtender<_>) = self.transactions.iter()
                 .filter_map(|transaction| transaction.accounts.get(&account.uuid))
-                .map(|value| value.0)
-                .sum()
+                .map(|amount| (amount.0.0, amount.1.0))
+                .unzip();
+        (Value(*value), Quantity(*quantity))
     }
 }
 
@@ -106,6 +109,10 @@ impl Account {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    pub fn uuid(&self) -> Uuid {
+        self.uuid
+    }
 }
 
 
@@ -135,7 +142,7 @@ impl Transaction {
         let mut result_quantity = None;
         while let Some(element) = xml_iter.next() {
             match element {
-                Ok(XmlEvent::StartElement { name, attributes: _, namespace }) => {
+                Ok(XmlEvent::StartElement { name, attributes: _, namespace: _}) => {
                     match (name.local_name.as_str(), name.namespace_ref().map(|str| str.rsplit_once('/').unwrap().1)) {
                         ("account", Some("split")) => {
                             if let Some(Ok(XmlEvent::Characters(text))) = xml_iter.next() {
@@ -147,14 +154,14 @@ impl Transaction {
                             if let Some(Ok(XmlEvent::Characters(text))) = xml_iter.next() {
                                 let (value, divisor) = text.split_once('/').unwrap();
                                 // println!("{value},{divisor}");
-                                result_value = Some(Value(value.parse().unwrap(), divisor.parse().unwrap()));
+                                result_value = Some(Value(Fixed(value.parse().unwrap(), divisor.parse().unwrap())));
                             }
                         }
 
                         ("quantity", Some("split")) => {
                             if let Some(Ok(XmlEvent::Characters(text))) = xml_iter.next() {
                                 let (value, divisor) = text.split_once('/').unwrap();
-                                result_quantity = Some(Quantity(value.parse().unwrap(), divisor.parse().unwrap()));
+                                result_quantity = Some(Quantity(Fixed(value.parse().unwrap(), divisor.parse().unwrap())));
                             }
                         }
 
@@ -189,48 +196,26 @@ impl Transaction {
 
 #[derive(Debug)]
 pub struct Transaction {
-    accounts:HashMap<Uuid, (Value, Quantity)>
+    pub accounts:HashMap<Uuid, (Value, Quantity)>
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Value(i32, u16);
+pub struct Value(pub Fixed<i32>);
 
-impl std::ops::Add for Value {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        if rhs.1 > self.1 {
-            let factor = rhs.1 / self.1;
-            Value(rhs.0 + self.0* factor as i32, rhs.1)
-        } else {
-            let factor = self.1 / rhs.1;
-            Value(self.0 + rhs.0* factor as i32, self.1)
-        }
-    }
-}
-
-impl std::ops::AddAssign for Value {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs
-    }
-}
-
-impl std::iter::Sum for Value {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        let mut sum = Self::default();
-        for value in iter {
-            sum += value;
-        }
-        sum
-    }
-}
 
 impl Default for Value {
     fn default() -> Self {
-        Self(Default::default(), 100)
+        Self(Fixed(0, 100))
     }
 }
 
 
-#[derive(Debug)]
-pub struct Quantity(i32, u16);
+#[derive(Debug, Clone, Copy)]
+pub struct Quantity(pub Fixed<i32>);
+
+
+impl Default for Quantity {
+    fn default() -> Self {
+        Self(Fixed(0, 100))
+    }
+}

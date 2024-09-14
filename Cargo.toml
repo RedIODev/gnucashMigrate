@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 xml = "0.8.20"
-uuid = "1.10.0"
+uuid = {version = "1.10.0", features = ["v4"]}
+chrono = "0.4.38"

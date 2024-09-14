@@ -4,7 +4,8 @@ use read::{read_old_db, DBInfo};
 
 mod read;
 mod write;
-
+mod common;
+mod xml_create;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let info = read_old_db("/home/rediodev/Documents/Bierwart/kasse_ss_24.gnucash")?;
@@ -12,9 +13,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     for account in info.accounts() {
         println!("'{}'", account.name());
     }
-    loop {
-        query_total(&info)?
-    }
+    write::write_start_state(&info, &info)?;
+    // loop {
+    //     query_total(&info)?
+    // }
     // let mut file = File::create("out.txt")?;
     // write!(file, "{:#?}", info)?;
     Ok(())
@@ -33,6 +35,6 @@ fn query_total(dbinfo:&DBInfo) -> Result<(), Box<dyn Error>>{
         println!("account {} not found.", input);
         return Ok(());
     };
-    println!("Total Balance for {} is {:?}", input, dbinfo.get_total_value(account));
+    println!("Total Balance for {} is {:?}", input, dbinfo.get_total(account));
     Ok(())
 }
