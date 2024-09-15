@@ -50,12 +50,13 @@ impl<'a> DBInfo<'a> {
 
     pub fn get_total(&self, account:&Account) -> (Value, Quantity) {
         let mut flag = false;
-        if account.name() == "Veranstaltungen" {
+        if account.name() == "Leergut/Pfand" {
             flag = true;
         }
         let (value, quantity): (SumExtender<_>, SumExtender<_>) = self.transactions.iter()
-                .filter_map(|transaction| transaction.accounts.get(&account.uuid))
-                .inspect(|v| if flag {println!("Veranstaltungen:{:?}", v)})
+                .flat_map(|t| t.accounts.iter())
+                .filter_map(|s| if s.0 == account.uuid { Some(s.1) } else { None })
+                .inspect(|v| if flag {println!("Leergut/Pfand:{:?}", v)})
                 .map(|amount| (amount.0.0, amount.1.0))
                 .unzip();
         (Value(*value), Quantity(*quantity))
@@ -137,17 +138,17 @@ impl Transaction {
         if name.local_name != "transaction" {
             return None;
         }
-        let mut accounts = HashMap::new();
+        let mut accounts = Vec::new();
         while let Some((account, value)) = Self::get_split(xml_iter) {
-            accounts.insert(account, value);
+            accounts.push((account, value));
         }
         Some(Transaction { accounts })
     }
 
     pub fn new(splits: Vec<(Uuid, Value, Quantity)>) -> Transaction {
-        let mut accounts = HashMap::new();
+        let mut accounts = Vec::new();
         for account in splits {
-            accounts.insert(account.0, (account.1, account.2));
+            accounts.push((account.0, (account.1, account.2)));
         }
         Transaction { accounts }
     }
@@ -212,7 +213,7 @@ impl Transaction {
 
 #[derive(Debug)]
 pub struct Transaction {
-    pub accounts:HashMap<Uuid, (Value, Quantity)>
+    pub accounts:Vec<(Uuid, (Value, Quantity))>
 }
 
 #[derive(Debug, Clone, Copy)]
