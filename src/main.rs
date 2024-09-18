@@ -5,6 +5,7 @@ use read::{read_old_db, DBInfo};
 mod read;
 mod write;
 mod common;
+mod mapper;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let info = read_old_db("/home/rediodev/Documents/Bierwart/kasse_ss_24.gnucash")?;
