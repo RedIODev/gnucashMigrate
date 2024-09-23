@@ -7,3 +7,8 @@ edition = "2021"
 xml = "0.8.20"
 uuid = {version = "1.10.0", features = ["v4"]}
 chrono = "0.4.38"
+serde = { version = "1.0.210", features = ["derive"]}
+quick-xml = {version = "0.36.2", features = ["serialize", "encoding"]}
+xml_schema_generator = "0.6.14"
+lazy_static = "1.5.0"
+derive_more = {version = "1.0.0", features = ["from"]}

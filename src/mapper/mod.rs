@@ -1,39 +1,13 @@
-use std::str::FromStr;
+use std::fs;
 
-use xml::{attribute::OwnedAttribute, reader::XmlEvent};
-
-mod account;
-mod split;
-mod transaction;
-mod gnucash;
-
-// trait XmlElement {
-//     const CHILD_PREFIX: Option<&'static str>;
-//     const NAME: &'static str;
-// }
+use xml_bindings::GncV2;
 
 
-trait FromString: FromStr {
-    fn from_string(value: String) -> Result<Self, <Self as FromStr>::Err>;
-}
+mod xml_bindings;
+pub mod wrappers;
 
-impl<T> FromString for T 
-where T: FromStr {
-    fn from_string(value: String) -> Result<Self, <Self as FromStr>::Err> {
-        T::from_str(&value)
-    }
-}
-
-trait Update<T> {
-    fn update<F>(&mut self, updater:F)
-    where F: FnMut(&mut T);
-}
-
-impl<T> Update<T> for Option<T> {
-    fn update<F>(&mut self, mut updater:F)
-    where F: FnMut(&mut T) {
-        if let Some(value) = self {
-            updater(value)
-        }
-    }
+pub fn parse_note_xml(xml_filename: &str) -> Result<GncV2, Box<dyn std::error::Error>> {
+    let xml_content = fs::read_to_string(xml_filename)?;
+    let note: GncV2 = quick_xml::de::from_str(&xml_content)?;
+    Ok(note)
 }
